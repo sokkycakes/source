@@ -95,6 +95,7 @@ def main():
     cf = open(os.path.join(out, "configs.jsonl"), "w")
     json.dump({"os": "freetype " + ".".join(map(str, freetype.version())), "wine": "", "fontsmoothing": 0, "smoothingtype": 0, "contrast": 0},
               open(os.path.join(out, "env.json"), "w"))
+    fontinfo = []
     for name in FACES:
         for weight in (400, 700):
             path = os.path.join(fdir, f"{name}_{weight}.ttf")
@@ -107,6 +108,16 @@ def main():
             upem = struct.unpack(">H", tabs["head"][18:20])[0]
             vdmx = parse_vdmx(tabs.get("VDMX"))
             gasp = parse_gasp(tabs.get("gasp"))
+            hhea = tabs["hhea"]
+            info = {"face": name, "weight": weight, "upem": upem, "winAscent": winA, "winDescent": winD,
+                    "typo": struct.unpack(">hhh", os2[68:74]), "hhea": struct.unpack(">hhh", hhea[4:10]),
+                    "gasp": gasp, "vdmx_ratios": [], "vdmx": {}}
+            v = tabs.get("VDMX")
+            if v:
+                _, nrec, nrat = struct.unpack(">HHH", v[:6])
+                info["vdmx_ratios"] = [struct.unpack(">BBBB", v[6 + 4 * i:10 + 4 * i]) for i in range(nrat)]
+                info["vdmx"] = {str(k): val for k, val in sorted(vdmx.items()) if k <= 30}
+            fontinfo.append(info)
             face = freetype.Face(path)
             for tall in range(8, 25):
                 fits = [p for p, (a, d) in vdmx.items() if a - d <= tall] if vdmx else []
@@ -170,6 +181,7 @@ def main():
                         gl.write(json.dumps(rec) + "\n")
     gl.close()
     cf.close()
+    json.dump(fontinfo, open(os.path.join(out, "fontinfo.json"), "w"), indent=1)
 
 if __name__ == "__main__":
     main()

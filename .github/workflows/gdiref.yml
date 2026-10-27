@@ -80,6 +80,16 @@ jobs:
           python3 -I tools/gdiref/compare.py out/windows out/freetype --md out/summary-freetype.md > /dev/null
           cat out/summary.md out/summary-freetype.md >> "$GITHUB_STEP_SUMMARY"
           echo "===== FREETYPE ====="; sed -n '/identical fraction/,$p' out/summary-freetype.md | grep -v "^- ("
+          echo "===== WINDOWS PPEM ====="
+          python3 -I - <<'PY'
+          import json
+          for line in open("out/windows/configs.jsonl"):
+              c = json.loads(line)
+              if c["aa"] == 0:
+                  print(c["face"], c["weight"], c["tall"], "ppem", c["tmHeight"] - c["tmInternalLeading"], "h", c["tmHeight"], "asc", c["tmAscent"], "desc", c["tmDescent"])
+          PY
+          echo "===== FONT INFO ====="
+          python3 -I -c "import json; [print(json.dumps(i)) for i in json.load(open('out/freetype/fontinfo.json'))]"
           for v in v40 novdmx; do
             python3 -I tools/gdiref/compare.py out/windows out/freetype-$v --md out/summary-freetype-$v.md > /dev/null
             echo "===== FREETYPE $v ====="; sed -n '/identical fraction/,$p' out/summary-freetype-$v.md | grep -v "^- ("
