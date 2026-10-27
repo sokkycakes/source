@@ -67,16 +67,24 @@ jobs:
           done
           xvfb-run -a $WINE wineserver -k || true
           xvfb-run -a $WINE gdiref.exe 'Z:'"$(pwd | tr '/' '\\')"'\out\wine'
+      - name: Run FreeType configured to approximate GDI
+        run: |
+          python3 -m pip install -q freetype-py
+          python3 -I tools/gdiref/ftref.py out/windows/fonts out/freetype
       - name: Compare
         run: |
           python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md --sheets out/sheets > /dev/null
-          cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
-          cat out/summary.md
+          python3 -I tools/gdiref/compare.py out/windows out/freetype --md out/summary-freetype.md > /dev/null
+          cat out/summary.md out/summary-freetype.md >> "$GITHUB_STEP_SUMMARY"
+          echo "===== WINE ====="; cat out/summary.md
+          echo "===== FREETYPE ====="; sed -n '/Font files/,$p' out/summary-freetype.md
       - uses: actions/upload-artifact@v4
         with:
           name: gdiref-wine-and-summary
           path: |
             out/wine
+            out/freetype
             out/summary.md
+            out/summary-freetype.md
             out/sheets
           retention-days: 14

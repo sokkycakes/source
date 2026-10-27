@@ -64,8 +64,8 @@ def sheet(gl, cfg, face, tall, weight, aa, text, path, scale=3):
 def facts(name, env, cfg, gl, out):
     out.append(f"## {name}: environment\n\n`{json.dumps(env)}`\n")
     out.append(f"## {name}: what the quality flag produces (ExtTextOutW, printable ASCII)\n")
-    out.append("| face | weight | tall | aa=0 levels | aa=1 levels | aa=1 colour fringes | gasp | EBLC |")
-    out.append("|---|---|---|---|---|---|---|---|")
+    out.append("| face | weight | tall | aa=0 levels | aa=1 levels | aa=1 colour fringes | GGO_GRAY8 levels | gasp | EBLC |")
+    out.append("|---|---|---|---|---|---|---|---|---|")
     for (face, tall, weight, aa), c in sorted(cfg.items()):
         if aa != 0:
             continue
@@ -80,8 +80,13 @@ def facts(name, env, cfg, gl, out):
                     if a == 1:
                         col |= g["eto"]["colour"]
             lv[a] = len(s)
+        g8 = set()
+        for cp in range(0x21, 0x7f):
+            g = gl.get((face, tall, weight, 1, cp))
+            if g and "data" in g["gray8"]:
+                g8 |= set(base64.b64decode(g["gray8"]["data"]))
         t = c.get("tables", {})
-        out.append(f"| {face} ({c['realface']}) | {weight} | {tall} | {lv[0]} | {lv[1]} | {col} | {t.get('gasp')} | {t.get('EBLC')} |")
+        out.append(f"| {face} ({c['realface']}) | {weight} | {tall} | {lv[0]} | {lv[1]} | {col} | {len(g8)} | {t.get('gasp')} | {t.get('EBLC')} |")
     out.append("")
 
 def main():
@@ -134,9 +139,11 @@ def main():
             s = gagg[(face, weight, aa)]
             s[0] += 1
             s[1] += (rg["a"], rg["b"], rg["c"]) == (cg["a"], cg["b"], cg["c"])
-            s[2] += rg["gray8"] == cg["gray8"]
-            s[3] += rg["mono"] == cg["mono"]
-            s[4] += rg["eto"] == cg["eto"]
+            k8 = lambda g: (g.get("data"), g["ox"], g["oy"])
+            s[2] += k8(rg["gray8"]) == k8(cg["gray8"])
+            s[3] += k8(rg["mono"]) == k8(cg["mono"])
+            ke = lambda e: tuple(e.get(f) for f in ("x", "y", "w", "h", "rgb"))
+            s[4] += ke(rg["eto"]) == ke(cg["eto"])
         for key in sorted(agg):
             a, s = agg[key], gagg[key]
             n = max(s[0], 1)
