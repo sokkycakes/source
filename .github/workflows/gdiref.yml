@@ -1,0 +1,82 @@
+name: GDI reference capture
+
+# Renders a grid of fonts with real Windows GDI and with Wine using the same
+# font files, then diffs them. Only runs when started by hand or when the
+# capture tool changes.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/gdiref/**'
+      - '.github/workflows/gdiref.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/gdiref
+      - run: sudo apt-get update -q && sudo apt-get install -y -q gcc-mingw-w64-x86-64
+      - run: x86_64-w64-mingw32-gcc -O2 -Wall -municode -o gdiref.exe tools/gdiref/gdiref.c -lgdi32
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gdiref-exe
+          path: gdiref.exe
+
+  windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gdiref-exe
+      - run: .\gdiref.exe windows-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gdiref-windows
+          path: windows-out
+          retention-days: 14
+
+  wine:
+    needs: windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/gdiref
+      - uses: actions/download-artifact@v4
+        with:
+          name: gdiref-exe
+      - uses: actions/download-artifact@v4
+        with:
+          name: gdiref-windows
+          path: out/windows
+      - run: sudo apt-get update -q && sudo apt-get install -y -q wine64 xvfb
+      - name: Run under Wine with the Windows font files
+        env:
+          WINEDEBUG: -all
+          WINEPREFIX: ${{ github.workspace }}/wpfx
+        run: |
+          WINE=$(command -v wine64 || echo /usr/lib/wine/wine64)
+          xvfb-run -a $WINE wineboot -i || true
+          mkdir -p "$WINEPREFIX/drive_c/windows/Fonts"
+          for f in out/windows/fonts/*; do
+            n=$(basename "$f" | tr ' ' '_' | tr 'A-Z' 'a-z')
+            cp "$f" "$WINEPREFIX/drive_c/windows/Fonts/$n"
+          done
+          xvfb-run -a $WINE wineserver -k || true
+          xvfb-run -a $WINE gdiref.exe 'Z:'"$(pwd | tr '/' '\\')"'\out\wine'
+      - name: Compare
+        run: |
+          python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md --sheets out/sheets > /dev/null
+          cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
+          cat out/summary.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gdiref-wine-and-summary
+          path: |
+            out/wine
+            out/summary.md
+            out/sheets
+          retention-days: 14

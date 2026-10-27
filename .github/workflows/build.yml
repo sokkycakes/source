@@ -1,6 +1,12 @@
 name: Build
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - 'tools/gdiref/**'
+      - '.github/workflows/gdiref.yml'
+      - '.github/workflows/build.yml'
+  pull_request:
 
 jobs:
   build:
