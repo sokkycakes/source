@@ -67,6 +67,36 @@ def gasp_gray(ranges, ppem):
             return bool(flags & 2)
     return True
 
+def gdi_size(tall, upem, winA, winD, vdmx, ratios):
+    """Pick ppem, ascent and descent for a positive CreateFont height.
+
+    Fitted to Windows build 26100 (193 of 204 face/weight/size configs exact;
+    the misses are VDMX ties where GDI picks one ppem higher):
+      * VDMX counts only through a 1:1 ratio record with bCharSet 1.
+      * With VDMX: take the entries whose yMax - yMin fits in `tall`, keep the
+        largest such height, and use the smallest ppem that has it. Ascent and
+        descent are that entry's yMax and -yMin.
+      * Otherwise (no usable VDMX, or no entry fits, in which case ppem stays
+        below the table's first size): ppem is the largest p with
+        round(p * (winAscent + winDescent) / unitsPerEm) <= tall, the cell is
+        exactly `tall`, ascent = round(winAscent * tall / (winAscent + winDescent))
+        and descent = tall - ascent.
+    """
+    rnd = lambda x: int(x + 0.5)
+    cap = 1 << 30
+    if vdmx and any(cs == 1 and x == 1 and y0 <= 1 <= y1 for cs, x, y0, y1 in ratios):
+        fits = {p: a - d for p, (a, d) in vdmx.items() if a - d <= tall}
+        if fits:
+            h = max(fits.values())
+            p = min(q for q, v in fits.items() if v == h)
+            return p, vdmx[p][0], -vdmx[p][1]
+        cap = min(vdmx) - 1
+    p = 1
+    while p + 1 <= cap and rnd((p + 1) * (winA + winD) / upem) <= tall:
+        p += 1
+    asc = rnd(winA * tall / (winA + winD))
+    return p, asc, tall - asc
+
 def b64(b):
     return base64.b64encode(bytes(b)).decode()
 
@@ -124,19 +154,7 @@ def main():
             fontinfo.append(info)
             face = freetype.Face(path)
             for tall in range(8, 25):
-                # VDMX is honoured only through a 1:1 ratio record with
-                # bCharSet 1; Tahoma's bCharSet-0 record is ignored by GDI
-                # (observed, run 40459217419).
-                use_vdmx = any(cs == 1 and x == 1 and y0 <= 1 <= y1 for cs, x, y0, y1 in vdmx_ratios)
-                fits = [p for p, (a, d) in vdmx.items() if a - d <= tall] if use_vdmx else []
-                if fits and os.environ.get("FTREF_NOVDMX") != "1":
-                    ppem = max(fits)
-                    asc, desc = vdmx[ppem]
-                    desc = -desc
-                else:
-                    ppem = int(tall * upem / (winA + winD) + 0.5)
-                    asc = int(winA * tall / (winA + winD) + 0.5)
-                    desc = tall - asc
+                ppem, asc, desc = gdi_size(tall, upem, winA, winD, vdmx, vdmx_ratios)
                 ppem = max(1, ppem + int(os.environ.get("FTREF_PPEM_OFFSET", "0")))
                 face.set_pixel_sizes(0, ppem)
                 for aa in (0, 1):
