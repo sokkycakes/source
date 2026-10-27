@@ -15,7 +15,8 @@ Settings (each is a guess under test, not established GDI behaviour):
   * GGO_GRAY8_BITMAP: FT grey render quantised to 0..64. GGO_BITMAP: mono.
 """
 import os, sys
-os.environ.setdefault("FREETYPE_PROPERTIES", "truetype:interpreter-version=35")
+INTERP = os.environ.get("FTREF_INTERP", "35")
+os.environ["FREETYPE_PROPERTIES"] = "truetype:interpreter-version=" + INTERP
 import base64, json, struct
 import freetype
 
@@ -108,9 +109,9 @@ def main():
             gasp = parse_gasp(tabs.get("gasp"))
             face = freetype.Face(path)
             for tall in range(8, 25):
-                if vdmx:
-                    fits = [p for p, (a, d) in vdmx.items() if a - d <= tall]
-                    ppem = max(fits) if fits else 1
+                fits = [p for p, (a, d) in vdmx.items() if a - d <= tall] if vdmx else []
+                if fits and os.environ.get("FTREF_NOVDMX") != "1":
+                    ppem = max(fits)
                     asc, desc = vdmx.get(ppem, (0, 0))
                     desc = -desc
                 else:

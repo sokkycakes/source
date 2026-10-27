@@ -149,6 +149,41 @@ def main():
             n = max(s[0], 1)
             out.append(f"| {key[0]} | {key[1]} | {key[2]} | {a[0]} | {a[1]}/{a[0]} | {100*s[1]/n:.1f}% | {100*s[2]/n:.1f}% | {100*s[3]/n:.1f}% | {100*s[4]/n:.1f}% |")
         out.append("")
+        out.append("### Why 1-bit (GGO_BITMAP) glyphs differ, per face\n")
+        out.append("| face | compared | equal | same pixels, moved | same box size, other pixels | different box size |")
+        out.append("|---|---|---|---|---|---|")
+        why = defaultdict(lambda: [0, 0, 0, 0, 0])
+        for k, rg in rgl.items():
+            cg = cgl.get(k)
+            if not cg or k[3] != 0:
+                continue
+            r, c = rg["mono"], cg["mono"]
+            w = why[k[0]]
+            w[0] += 1
+            if (r.get("data"), r["ox"], r["oy"]) == (c.get("data"), c["ox"], c["oy"]):
+                w[1] += 1
+            elif r.get("data") == c.get("data"):
+                w[2] += 1
+            elif (r["bbx"], r["bby"]) == (c["bbx"], c["bby"]):
+                w[3] += 1
+            else:
+                w[4] += 1
+        for f in sorted(why):
+            w = why[f]
+            out.append(f"| {f} | {w[0]} | {w[1]} | {w[2]} | {w[3]} | {w[4]} |")
+        out.append("")
+        out.append("### Line metrics: tmHeight / tmAscent equal per face\n")
+        hm = defaultdict(lambda: [0, 0, 0])
+        for k, rc in rcfg.items():
+            cc = ccfg.get(k)
+            if cc and k[3] == 0:
+                h = hm[k[0]]
+                h[0] += 1
+                h[1] += rc["tmHeight"] == cc["tmHeight"]
+                h[2] += rc["tmAscent"] == cc["tmAscent"]
+        for f in sorted(hm):
+            out.append(f"- {f}: tmHeight {hm[f][1]}/{hm[f][0]}, tmAscent {hm[f][2]}/{hm[f][0]}")
+        out.append("")
         out.append("### First metric differences\n")
         shown = 0
         for k in sorted(rcfg):

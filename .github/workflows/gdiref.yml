@@ -71,13 +71,19 @@ jobs:
         run: |
           python3 -m pip install -q freetype-py
           python3 tools/gdiref/ftref.py out/windows/fonts out/freetype
+          FTREF_INTERP=40 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-v40
+          FTREF_NOVDMX=1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-novdmx
       - name: Compare
         run: |
           python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md --sheets out/sheets > /dev/null
+          echo "===== WINE vs WINDOWS ====="; sed -n '/identical fraction/,$p' out/summary.md | grep -v "^- ("
           python3 -I tools/gdiref/compare.py out/windows out/freetype --md out/summary-freetype.md > /dev/null
           cat out/summary.md out/summary-freetype.md >> "$GITHUB_STEP_SUMMARY"
-          echo "===== WINE ====="; cat out/summary.md
-          echo "===== FREETYPE ====="; sed -n '/Font files/,$p' out/summary-freetype.md
+          echo "===== FREETYPE ====="; sed -n '/identical fraction/,$p' out/summary-freetype.md | grep -v "^- ("
+          for v in v40 novdmx; do
+            python3 -I tools/gdiref/compare.py out/windows out/freetype-$v --md out/summary-freetype-$v.md > /dev/null
+            echo "===== FREETYPE $v ====="; sed -n '/identical fraction/,$p' out/summary-freetype-$v.md | grep -v "^- ("
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: gdiref-wine-and-summary
