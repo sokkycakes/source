@@ -71,8 +71,8 @@ jobs:
         run: |
           python3 -m pip install -q freetype-py
           python3 tools/gdiref/ftref.py out/windows/fonts out/freetype
-          FTREF_INTERP=40 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-v40
-          FTREF_NOVDMX=1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-novdmx
+          FTREF_PPEM_OFFSET=-1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-m1
+          FTREF_PPEM_OFFSET=1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-p1
       - name: Compare
         run: |
           python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md --sheets out/sheets > /dev/null
@@ -90,7 +90,9 @@ jobs:
           PY
           echo "===== FONT INFO ====="
           python3 -I -c "import json; [print(json.dumps(i)) for i in json.load(open('out/freetype/fontinfo.json'))]"
-          for v in v40 novdmx; do
+          echo "===== BEST PPEM ====="
+          python3 -I tools/gdiref/best_ppem.py out/windows m1=out/freetype-m1 0=out/freetype p1=out/freetype-p1
+          for v in m1 p1; do
             python3 -I tools/gdiref/compare.py out/windows out/freetype-$v --md out/summary-freetype-$v.md > /dev/null
             echo "===== FREETYPE $v ====="; sed -n '/identical fraction/,$p' out/summary-freetype-$v.md | grep -v "^- ("
           done

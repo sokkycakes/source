@@ -107,6 +107,10 @@ def main():
             winA, winD = struct.unpack(">HH", os2[74:78])
             upem = struct.unpack(">H", tabs["head"][18:20])[0]
             vdmx = parse_vdmx(tabs.get("VDMX"))
+            vdmx_ratios = []
+            if tabs.get("VDMX"):
+                _, _, nrat = struct.unpack(">HHH", tabs["VDMX"][:6])
+                vdmx_ratios = [struct.unpack(">BBBB", tabs["VDMX"][6 + 4 * i:10 + 4 * i]) for i in range(nrat)]
             gasp = parse_gasp(tabs.get("gasp"))
             hhea = tabs["hhea"]
             info = {"face": name, "weight": weight, "upem": upem, "winAscent": winA, "winDescent": winD,
@@ -120,15 +124,20 @@ def main():
             fontinfo.append(info)
             face = freetype.Face(path)
             for tall in range(8, 25):
-                fits = [p for p, (a, d) in vdmx.items() if a - d <= tall] if vdmx else []
+                # VDMX is honoured only through a 1:1 ratio record with
+                # bCharSet 1; Tahoma's bCharSet-0 record is ignored by GDI
+                # (observed, run 40459217419).
+                use_vdmx = any(cs == 1 and x == 1 and y0 <= 1 <= y1 for cs, x, y0, y1 in vdmx_ratios)
+                fits = [p for p, (a, d) in vdmx.items() if a - d <= tall] if use_vdmx else []
                 if fits and os.environ.get("FTREF_NOVDMX") != "1":
                     ppem = max(fits)
-                    asc, desc = vdmx.get(ppem, (0, 0))
+                    asc, desc = vdmx[ppem]
                     desc = -desc
                 else:
                     ppem = int(tall * upem / (winA + winD) + 0.5)
-                    asc = int(winA * ppem / upem + 0.5)
-                    desc = int(winD * ppem / upem + 0.5)
+                    asc = int(winA * tall / (winA + winD) + 0.5)
+                    desc = tall - asc
+                ppem = max(1, ppem + int(os.environ.get("FTREF_PPEM_OFFSET", "0")))
                 face.set_pixel_sizes(0, ppem)
                 for aa in (0, 1):
                     cf.write(json.dumps({"face": name, "tall": tall, "weight": weight, "aa": aa, "realface": face.family_name.decode(),
