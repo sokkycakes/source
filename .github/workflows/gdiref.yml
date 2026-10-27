@@ -38,9 +38,37 @@ jobs:
           path: windows-out
           retention-days: 14
 
-  wine:
+  freetype:
     needs: windows
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/gdiref
+      - uses: actions/download-artifact@v4
+        with:
+          name: gdiref-windows
+          path: out/windows
+      - name: Run FreeType configured to approximate GDI
+        run: |
+          python3 -m pip install -q freetype-py
+          python3 tools/gdiref/ftref.py out/windows/fonts out/freetype
+          FTREF_PPEM_OFFSET=-1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-m1
+          FTREF_PPEM_OFFSET=1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-p1
+      - name: Compare
+        run: |
+          python3 -I tools/gdiref/compare.py out/windows out/freetype --md out/summary-freetype.md > /dev/null
+          cat out/summary-freetype.md >> "$GITHUB_STEP_SUMMARY"
+          echo "===== FREETYPE ====="; sed -n '/identical fraction/,$p' out/summary-freetype.md | grep -v "^- ("
+          echo "===== BEST PPEM ====="
+          python3 -I tools/gdiref/best_ppem.py out/windows m1=out/freetype-m1 0=out/freetype p1=out/freetype-p1
+
+  wine:
+    if: github.event_name == 'workflow_dispatch'
+    needs: windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,42 +95,8 @@ jobs:
           done
           xvfb-run -a $WINE wineserver -k || true
           xvfb-run -a $WINE gdiref.exe 'Z:'"$(pwd | tr '/' '\\')"'\out\wine'
-      - name: Run FreeType configured to approximate GDI
-        run: |
-          python3 -m pip install -q freetype-py
-          python3 tools/gdiref/ftref.py out/windows/fonts out/freetype
-          FTREF_PPEM_OFFSET=-1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-m1
-          FTREF_PPEM_OFFSET=1 python3 tools/gdiref/ftref.py out/windows/fonts out/freetype-p1
       - name: Compare
         run: |
-          python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md --sheets out/sheets > /dev/null
-          echo "===== WINE vs WINDOWS ====="; sed -n '/identical fraction/,$p' out/summary.md | grep -v "^- ("
-          python3 -I tools/gdiref/compare.py out/windows out/freetype --md out/summary-freetype.md > /dev/null
-          cat out/summary.md out/summary-freetype.md >> "$GITHUB_STEP_SUMMARY"
-          echo "===== FREETYPE ====="; sed -n '/identical fraction/,$p' out/summary-freetype.md | grep -v "^- ("
-          echo "===== WINDOWS PPEM ====="
-          python3 -I - <<'PY'
-          import json
-          for line in open("out/windows/configs.jsonl"):
-              c = json.loads(line)
-              if c["aa"] == 0:
-                  print(c["face"], c["weight"], c["tall"], "ppem", c["tmHeight"] - c["tmInternalLeading"], "h", c["tmHeight"], "asc", c["tmAscent"], "desc", c["tmDescent"])
-          PY
-          echo "===== FONT INFO ====="
-          python3 -I -c "import json; [print(json.dumps(i)) for i in json.load(open('out/freetype/fontinfo.json'))]"
-          echo "===== BEST PPEM ====="
-          python3 -I tools/gdiref/best_ppem.py out/windows m1=out/freetype-m1 0=out/freetype p1=out/freetype-p1
-          for v in m1 p1; do
-            python3 -I tools/gdiref/compare.py out/windows out/freetype-$v --md out/summary-freetype-$v.md > /dev/null
-            echo "===== FREETYPE $v ====="; sed -n '/identical fraction/,$p' out/summary-freetype-$v.md | grep -v "^- ("
-          done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gdiref-wine-and-summary
-          path: |
-            out/wine
-            out/freetype
-            out/summary.md
-            out/summary-freetype.md
-            out/sheets
-          retention-days: 14
+          python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md > /dev/null
+          cat out/summary.md >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/identical fraction/,$p' out/summary.md | grep -v "^- ("
