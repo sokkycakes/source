@@ -61,6 +61,8 @@ jobs:
           python3 -I tools/gdiref/compare.py out/windows out/freetype --md out/summary-freetype.md > /dev/null
           cat out/summary-freetype.md >> "$GITHUB_STEP_SUMMARY"
           echo "===== FREETYPE ====="; sed -n '/identical fraction/,$p' out/summary-freetype.md | grep -v "^- ("
+          echo "===== SHEETS ====="
+          python3 -I tools/gdiref/sheets.py out/windows out/freetype
           echo "===== BEST PPEM ====="
           python3 -I tools/gdiref/best_ppem.py out/windows m1=out/freetype-m1 0=out/freetype p1=out/freetype-p1
 
