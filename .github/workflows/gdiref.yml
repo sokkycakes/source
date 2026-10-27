@@ -70,7 +70,7 @@ jobs:
       - name: Run FreeType configured to approximate GDI
         run: |
           python3 -m pip install -q freetype-py
-          python3 -I tools/gdiref/ftref.py out/windows/fonts out/freetype
+          python3 tools/gdiref/ftref.py out/windows/fonts out/freetype
       - name: Compare
         run: |
           python3 -I tools/gdiref/compare.py out/windows out/wine --md out/summary.md --sheets out/sheets > /dev/null
